@@ -1,0 +1,176 @@
+openapi: 3.0.0
+info:
+  title: Slack2Backlog API
+  description: API for receiving Slack events and processing them to create Backlog issues
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: nakao@bridge.vc
+
+servers:
+  - url: https://api.example.com/{stage}
+    description: Production API
+    variables:
+      stage:
+        default: prod
+        enum:
+          - dev
+          - staging
+          - prod
+  - url: http://localhost:3000
+    description: Local development server
+
+paths:
+  /slack/events:
+    post:
+      summary: Receive Slack Events
+      description: Endpoint for Slack Events API to send workspace events
+      operationId: receiveSlackEvent
+      tags:
+        - Slack Integration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SlackEvent'
+            examples:
+              message:
+                summary: Message event
+                value:
+                  token: "verification_token"
+                  team_id: "T123"
+                  api_app_id: "A123"
+                  event:
+                    type: "message"
+                    channel: "C123"
+                    user: "U123"
+                    text: "Backlog登録希望 テストタスク"
+                    ts: "1234567890.123456"
+                  type: "event_callback"
+                  event_id: "Ev123"
+              url_verification:
+                summary: URL verification challenge
+                value:
+                  token: "verification_token"
+                  challenge: "3eZbrw1aBm2rZgRNFdxV2595E9CY3gmdALWMmHkvFXO7tYXAYM8P"
+                  type: "url_verification"
+      parameters:
+        - in: header
+          name: X-Slack-Signature
+          schema:
+            type: string
+          required: true
+          description: HMAC-SHA256 signature for request verification
+        - in: header
+          name: X-Slack-Request-Timestamp
+          schema:
+            type: string
+          required: true
+          description: Unix timestamp of when the request was sent
+      responses:
+        '200':
+          description: Event received successfully
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/EventResponse'
+                  - $ref: '#/components/schemas/ChallengeResponse'
+        '400':
+          description: Bad request - Invalid signature or timestamp
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      x-amazon-apigateway-integration:
+        uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${EventIngestFunction.Arn}/invocations
+        passthroughBehavior: when_no_match
+        httpMethod: POST
+        type: aws_proxy
+
+components:
+  schemas:
+    SlackEvent:
+      type: object
+      required:
+        - token
+        - type
+      properties:
+        token:
+          type: string
+          description: Verification token (deprecated, use signing secret)
+        team_id:
+          type: string
+          description: Slack workspace ID
+        api_app_id:
+          type: string
+          description: Slack app ID
+        event:
+          type: object
+          description: The actual event data
+          properties:
+            type:
+              type: string
+              enum: [message, app_mention, reaction_added]
+            channel:
+              type: string
+            user:
+              type: string
+            text:
+              type: string
+            ts:
+              type: string
+        type:
+          type: string
+          enum: [url_verification, event_callback]
+        challenge:
+          type: string
+          description: Challenge parameter for URL verification
+        event_id:
+          type: string
+          description: Unique event identifier
+        event_time:
+          type: integer
+          description: Unix timestamp of event
+
+    EventResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          default: true
+
+    ChallengeResponse:
+      type: object
+      properties:
+        challenge:
+          type: string
+          description: Echo back the challenge parameter
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+        details:
+          type: object
+          description: Additional error details
+
+  securitySchemes:
+    SlackSignature:
+      type: apiKey
+      in: header
+      name: X-Slack-Signature
+      description: HMAC-SHA256 signature for request verification
+
+security:
+  - SlackSignature: []
