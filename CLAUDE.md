@@ -21,6 +21,53 @@ git clone git@github.com:bridge-nakao/slack2backlog.git
 
 Claude Codeを起動した際、このCLAUDE.mdを読み込んで、ユーザーが実行すべきコマンドや確認事項があれば最初に提示してください。
 
+## 📅 2025年6月26日 作業記録
+
+### 完了した作業
+1. **Phase 4完了**（Issues #21-25）
+   - CI/CDパイプライン構築
+   - 本番環境デプロイドキュメント作成
+   - 監視・アラート設定
+   - Slack App設定ガイド作成
+   - Backlog設定ガイド作成
+
+2. **ローカル環境構築**
+   - LOCAL_QUICK_START.md作成
+   - test-with-correct-signature.js作成
+   - SSHキー設定方法の説明
+
+3. **実際のBacklog環境確認**
+   - スペース: bridge70.backlog.jp
+   - PROJECT_ID: 214575
+   - ISSUE_TYPE_ID: 1186263
+   - APIキー: 動作確認済み
+
+### 現在の状況
+- **作業ディレクトリ**: `/mnt/d/Git/slack2backlog`（オリジナル）
+- **テストディレクトリ**: `/mnt/d/Git/slack2backlog_test/slack2backlog`（ユーザーが別途作成）
+- **問題**: LocalStackの起動に失敗（権限エラー）
+- **対応**: シンプルなLambda関数（index-simple.js）を作成してSQS送信をスキップ
+
+### 次回の作業内容
+1. SAM Localでのローカルテスト完了
+2. 実際のBacklog環境での動作確認
+3. 必要に応じてLocalStack問題の解決
+4. Phase 5（拡張機能）の検討
+
+### テスト手順（次回用）
+```bash
+# 1. SAM Localを起動
+sam local start-api --env-vars env.local.json
+
+# 2. URL検証テスト
+curl -X POST http://localhost:3000/slack/events \
+  -H "Content-Type: application/json" \
+  -d '{"type":"url_verification","challenge":"test-123"}'
+
+# 3. メッセージイベントテスト
+node scripts/test-with-correct-signature.js
+```
+
 ### 📅 本日の日時確認
 
 **重要**: Claude Code起動時に必ず1回、本日の日時を表示してください。これにより日付の誤記を防止します。

@@ -55,8 +55,8 @@ cp env.json env.local.json
 
 # 必要に応じて編集
 # - BACKLOG_SPACE: 実際のBacklogスペース
-# - PROJECT_ID: 実際のプロジェクトID
-# - ISSUE_TYPE_ID: 実際の課題タイプID
+# - PROJECT_ID: 214575
+# - ISSUE_TYPE_ID: 1186263
 ```
 
 ### 4. SAM Localでアプリケーション起動
