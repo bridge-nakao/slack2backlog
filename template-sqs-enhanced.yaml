@@ -1,0 +1,221 @@
+# Enhanced SQS Queue configurations to be integrated with main template
+Resources:
+  # Standard Queue with enhanced settings
+  EventQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${AWS::StackName}-event-queue-${Stage}
+      VisibilityTimeout: 60  # 60 seconds for Lambda processing
+      MessageRetentionPeriod: 345600  # 4 days (in seconds)
+      MaximumMessageSize: 262144  # 256 KB
+      ReceiveMessageWaitTimeSeconds: 20  # Long polling enabled
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
+        maxReceiveCount: 3
+      KmsMasterKeyId: alias/aws/sqs  # Server-side encryption
+      Tags:
+        - Key: Environment
+          Value: !Ref Stage
+        - Key: Application
+          Value: slack2backlog
+
+  # Dead Letter Queue with enhanced settings
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${AWS::StackName}-dlq-${Stage}
+      MessageRetentionPeriod: 1209600  # 14 days (maximum)
+      MaximumMessageSize: 262144  # 256 KB
+      KmsMasterKeyId: alias/aws/sqs
+      Tags:
+        - Key: Environment
+          Value: !Ref Stage
+        - Key: Application
+          Value: slack2backlog
+        - Key: Type
+          Value: DLQ
+
+  # Queue Policy for access control
+  EventQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref EventQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowLambdaAccess
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action:
+              - sqs:SendMessage
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
+              - sqs:GetQueueAttributes
+            Resource: !GetAtt EventQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: 
+                  - !GetAtt EventIngestFunction.Arn
+                  - !GetAtt BacklogWorkerFunction.Arn
+
+  # DLQ Policy
+  DLQPolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref DeadLetterQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowSQSRedrivePolicy
+            Effect: Allow
+            Principal:
+              Service: sqs.amazonaws.com
+            Action:
+              - sqs:SendMessage
+            Resource: !GetAtt DeadLetterQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !GetAtt EventQueue.Arn
+
+  # CloudWatch Alarms for Queue monitoring
+  EventQueueDepthAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${AWS::StackName}-${Stage}-EventQueue-Depth
+      AlarmDescription: Alert when event queue has too many messages
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 100
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt EventQueue.QueueName
+      TreatMissingData: notBreaching
+
+  EventQueueAgeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${AWS::StackName}-${Stage}-EventQueue-Age
+      AlarmDescription: Alert when messages are too old in event queue
+      MetricName: ApproximateAgeOfOldestMessage
+      Namespace: AWS/SQS
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 600  # 10 minutes
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt EventQueue.QueueName
+      TreatMissingData: notBreaching
+
+  DLQDepthAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${AWS::StackName}-${Stage}-DLQ-Messages
+      AlarmDescription: Alert when messages arrive in DLQ
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt DeadLetterQueue.QueueName
+      TreatMissingData: notBreaching
+
+  # Dashboard for Queue monitoring
+  QueueDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub ${AWS::StackName}-${Stage}-queue-dashboard
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/SQS", "ApproximateNumberOfMessagesVisible", {"QueueName": "${EventQueue.QueueName}"}],
+                  [".", "ApproximateNumberOfMessagesNotVisible", {"QueueName": "${EventQueue.QueueName}"}],
+                  [".", "ApproximateNumberOfMessagesDelayed", {"QueueName": "${EventQueue.QueueName}"}]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "Event Queue Messages"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/SQS", "ApproximateAgeOfOldestMessage", {"QueueName": "${EventQueue.QueueName}"}]
+                ],
+                "period": 300,
+                "stat": "Maximum",
+                "region": "${AWS::Region}",
+                "title": "Message Age"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/SQS", "NumberOfMessagesSent", {"QueueName": "${EventQueue.QueueName}", "stat": "Sum"}],
+                  [".", "NumberOfMessagesReceived", {"QueueName": "${EventQueue.QueueName}", "stat": "Sum"}],
+                  [".", "NumberOfMessagesDeleted", {"QueueName": "${EventQueue.QueueName}", "stat": "Sum"}]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Queue Operations"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/SQS", "ApproximateNumberOfMessagesVisible", {"QueueName": "${DeadLetterQueue.QueueName}"}]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Dead Letter Queue"
+              }
+            }
+          ]
+        }
+
+Outputs:
+  EventQueueUrl:
+    Description: URL of the event queue
+    Value: !Ref EventQueue
+    Export:
+      Name: !Sub ${AWS::StackName}-EventQueueUrl
+
+  EventQueueArn:
+    Description: ARN of the event queue
+    Value: !GetAtt EventQueue.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-EventQueueArn
+
+  DeadLetterQueueUrl:
+    Description: URL of the dead letter queue
+    Value: !Ref DeadLetterQueue
+    Export:
+      Name: !Sub ${AWS::StackName}-DeadLetterQueueUrl
+
+  DeadLetterQueueArn:
+    Description: ARN of the dead letter queue
+    Value: !GetAtt DeadLetterQueue.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-DeadLetterQueueArn
