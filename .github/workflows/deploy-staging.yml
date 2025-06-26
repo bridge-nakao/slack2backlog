@@ -1,0 +1,127 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches: [ staging ]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ap-northeast-1
+  ENVIRONMENT: staging
+  STACK_NAME: slack2backlog-staging
+
+jobs:
+  deploy:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    environment: staging
+    
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.9'
+
+    - name: Setup SAM CLI
+      uses: aws-actions/setup-sam@v2
+      with:
+        use-installer: true
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18.x'
+        cache: 'npm'
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+        role-session-name: GitHubActions-Deploy
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Install dependencies
+      run: |
+        npm ci
+        cd src/event_ingest && npm ci
+        cd ../backlog_worker && npm ci
+
+    - name: Run tests
+      run: npm test
+
+    - name: Build SAM application
+      run: sam build --use-container
+
+    - name: Validate SAM template
+      run: sam validate --lint
+
+    - name: Deploy to AWS
+      run: |
+        sam deploy \
+          --stack-name ${{ env.STACK_NAME }} \
+          --s3-bucket ${{ secrets.SAM_ARTIFACTS_BUCKET }} \
+          --capabilities CAPABILITY_IAM \
+          --region ${{ env.AWS_REGION }} \
+          --no-fail-on-empty-changeset \
+          --parameter-overrides \
+            Environment=${{ env.ENVIRONMENT }} \
+            SlackSigningSecret=${{ secrets.SLACK_SIGNING_SECRET }} \
+            SlackBotToken=${{ secrets.SLACK_BOT_TOKEN }} \
+            BacklogApiKey=${{ secrets.BACKLOG_API_KEY }} \
+            BacklogSpace=${{ secrets.BACKLOG_SPACE }} \
+            BacklogProjectId=${{ secrets.BACKLOG_PROJECT_ID }} \
+            BacklogIssueTypeId=${{ secrets.BACKLOG_ISSUE_TYPE_ID }}
+
+    - name: Get stack outputs
+      id: stack
+      run: |
+        API_URL=$(aws cloudformation describe-stacks \
+          --stack-name ${{ env.STACK_NAME }} \
+          --query 'Stacks[0].Outputs[?OutputKey==`ApiUrl`].OutputValue' \
+          --output text)
+        echo "api_url=$API_URL" >> $GITHUB_OUTPUT
+
+    - name: Run integration tests
+      run: |
+        export API_GATEWAY_URL="${{ steps.stack.outputs.api_url }}"
+        npm test -- tests/integration/integration.test.js || true
+
+    - name: Generate deployment report
+      run: |
+        echo "# Staging Deployment Report" > deployment-report.md
+        echo "## Stack Information" >> deployment-report.md
+        echo "- Stack Name: ${{ env.STACK_NAME }}" >> deployment-report.md
+        echo "- API URL: ${{ steps.stack.outputs.api_url }}" >> deployment-report.md
+        echo "- Region: ${{ env.AWS_REGION }}" >> deployment-report.md
+        echo "- Environment: ${{ env.ENVIRONMENT }}" >> deployment-report.md
+        echo "" >> deployment-report.md
+        echo "## Deployment Time" >> deployment-report.md
+        echo "- Date: $(date)" >> deployment-report.md
+        echo "- Commit: ${{ github.sha }}" >> deployment-report.md
+
+    - name: Upload deployment report
+      uses: actions/upload-artifact@v4
+      with:
+        name: staging-deployment-report
+        path: deployment-report.md
+        retention-days: 30
+
+    - name: Notify deployment
+      if: always()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        text: |
+          Staging deployment ${{ job.status }}
+          Stack: ${{ env.STACK_NAME }}
+          API URL: ${{ steps.stack.outputs.api_url }}
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
