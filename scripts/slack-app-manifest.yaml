@@ -1,0 +1,47 @@
+display_information:
+  name: Backlog Bot
+  description: Slackメッセージから自動的にBacklog課題を作成します
+  background_color: "#2c3e50"
+  long_description: |
+    このBotは、Slackで「Backlog登録希望」というキーワードを含むメッセージを検知し、
+    自動的にBacklogプロジェクトに課題を作成します。
+    
+    使い方:
+    1. Botを任意のチャンネルに招待
+    2. 「Backlog登録希望 タスクの説明」と投稿
+    3. Backlogに課題が自動作成され、リンクが返信されます
+
+features:
+  bot_user:
+    display_name: Backlog Bot
+    always_online: true
+
+oauth_config:
+  scopes:
+    bot:
+      - chat:write
+      - chat:write.public
+      - channels:history
+      - groups:history
+      - im:history
+      - mpim:history
+      - channels:read
+      - groups:read
+      - im:read
+      - mpim:read
+
+settings:
+  event_subscriptions:
+    request_url: REPLACE_WITH_YOUR_API_GATEWAY_URL/slack/events
+    bot_events:
+      - message.channels
+      - message.groups
+      - message.im
+      - message.mpim
+
+  interactivity:
+    is_enabled: false
+
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false
