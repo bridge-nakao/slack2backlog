@@ -14,8 +14,15 @@
 
 ### 1. リポジトリのクローンと依存関係インストール
 
+**注意: このリポジトリはPrivateです。アクセス権限が必要です。**
+
 ```bash
-git clone https://github.com/bridge-nakao/slack2backlog.git
+# Personal Access Token (PAT) を使用する場合
+git clone https://<YOUR_PAT>@github.com/bridge-nakao/slack2backlog.git
+
+# SSH を使用する場合（推奨）
+git clone git@github.com:bridge-nakao/slack2backlog.git
+
 cd slack2backlog
 npm install
 
