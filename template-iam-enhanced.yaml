@@ -1,0 +1,164 @@
+# Enhanced IAM configurations to be integrated with main template
+Resources:
+  # Lambda Execution Role for Event Ingest Function
+  EventIngestFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${AWS::StackName}-event-ingest-role-${Stage}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+        - PolicyName: EventIngestPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # SQS permissions
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt EventQueue.Arn
+              # Secrets Manager permissions
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref SlackSecrets
+              # CloudWatch Logs permissions (additional)
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-event-ingest-${Stage}:*'
+      Tags:
+        - Key: Environment
+          Value: !Ref Stage
+        - Key: Application
+          Value: slack2backlog
+
+  # Lambda Execution Role for Backlog Worker Function
+  BacklogWorkerFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${AWS::StackName}-backlog-worker-role-${Stage}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+        - PolicyName: BacklogWorkerPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # SQS permissions
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                  - sqs:ChangeMessageVisibility
+                Resource: !GetAtt EventQueue.Arn
+              # DLQ permissions
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                Resource: !GetAtt DeadLetterQueue.Arn
+              # Secrets Manager permissions
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: 
+                  - !Ref SlackSecrets
+                  - !Ref BacklogSecrets
+              # DynamoDB permissions for idempotency
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                Resource: !GetAtt IdempotencyTable.Arn
+              # SSM Parameter Store permissions
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                  - ssm:GetParametersByPath
+                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/${Stage}/*'
+              # CloudWatch Logs permissions (additional)
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-backlog-worker-${Stage}:*'
+      Tags:
+        - Key: Environment
+          Value: !Ref Stage
+        - Key: Application
+          Value: slack2backlog
+
+  # Cross-service resource policy for API Gateway to invoke Lambda
+  ApiGatewayInvokePolicy:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref EventIngestFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${SlackApi}/*/*'
+
+  # Resource policy for SQS to invoke Lambda
+  SQSInvokePolicy:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref BacklogWorkerFunction
+      Action: lambda:InvokeFunction
+      Principal: sqs.amazonaws.com
+      SourceArn: !GetAtt EventQueue.Arn
+
+  # Service-linked role for API Gateway logging (if not exists)
+  ApiGatewayCloudWatchRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+      Path: /
+      Tags:
+        - Key: Environment
+          Value: !Ref Stage
+        - Key: Application
+          Value: slack2backlog
+
+Outputs:
+  EventIngestRoleArn:
+    Description: ARN of the Event Ingest Lambda execution role
+    Value: !GetAtt EventIngestFunctionRole.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-EventIngestRoleArn
+
+  BacklogWorkerRoleArn:
+    Description: ARN of the Backlog Worker Lambda execution role
+    Value: !GetAtt BacklogWorkerFunctionRole.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-BacklogWorkerRoleArn
