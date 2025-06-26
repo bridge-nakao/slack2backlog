@@ -133,9 +133,9 @@ sudo apt install python3-pytest -y
 pytest --version
 ```
 
-## 7. GitHub CLI (gh)のインストール
+## 7. GitHub CLI (gh)のインストールと設定
 
-### 公式リポジトリから最新版をインストール
+### 7.1 公式リポジトリから最新版をインストール
 
 ```bash
 # GPGキーの追加
@@ -150,6 +150,69 @@ sudo apt install gh -y
 
 # 確認
 gh --version
+```
+
+### 7.2 GitHub認証の設定
+
+インストール後、GitHubアカウントとの認証を設定する必要があります：
+
+```bash
+# 対話形式で認証設定
+gh auth login
+```
+
+以下のプロンプトに答えます：
+1. **What account do you want to log into?** → GitHub.com
+2. **What is your preferred protocol for Git operations?** → HTTPS
+3. **Authenticate Git with your GitHub credentials?** → Yes
+4. **How would you like to authenticate GitHub CLI?** → Login with a web browser
+
+ブラウザが開かない場合は、Personal Access Tokenを使用：
+```bash
+# Personal Access Tokenを使用する場合
+gh auth login --with-token < token.txt
+```
+
+### 7.3 認証状態の確認
+
+```bash
+# 認証状態を確認
+gh auth status
+```
+
+期待される出力：
+```
+github.com
+  ✓ Logged in to github.com account YOUR_USERNAME
+  - Active account: true
+  - Git operations protocol: https
+  - Token: gho_************************************
+```
+
+### 7.4 リポジトリでの動作確認
+
+```bash
+# 現在のリポジトリ情報を表示
+gh repo view
+
+# Issueの一覧を表示（権限確認）
+gh issue list --limit 5
+
+# PRの一覧を表示
+gh pr list --limit 5
+```
+
+### 7.5 必要なスコープ
+
+GitHub CLIで全機能を使用するには、以下のスコープが必要です：
+- `repo` - リポジトリへのフルアクセス
+- `workflow` - GitHub Actionsワークフローの更新
+- `read:org` - 組織情報の読み取り（組織リポジトリの場合）
+
+スコープが不足している場合：
+```bash
+# 認証を更新してスコープを追加
+gh auth refresh -s repo,workflow,read:org
 ```
 
 ## 8. 追加の推奨ツール

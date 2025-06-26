@@ -41,3 +41,26 @@ check_command "yq" "yq --version"
 
 echo
 echo "=== Check Complete ==="
+
+# GitHub CLI詳細確認
+echo
+echo "=== GitHub CLI Authentication Check ==="
+if command -v gh &> /dev/null; then
+    echo "Checking GitHub authentication status..."
+    gh auth status
+    echo
+    echo "Current repository:"
+    if [ -d .git ]; then
+        gh repo view --json name,owner,url 2>/dev/null | jq -r '"\(.owner.login)/\(.name) - \(.url)"' || echo "Not a GitHub repository or gh not configured"
+    else
+        echo "Not in a git repository"
+    fi
+    echo
+    echo "Testing issue access:"
+    gh issue list --limit 1 --state all &>/dev/null && echo -e "${GREEN}✓${NC} Issue operations: Available" || echo -e "${RED}✗${NC} Issue operations: Not available"
+else
+    echo -e "${RED}✗${NC} GitHub CLI not installed"
+fi
+
+echo
+echo "=== Final Check Complete ==="
