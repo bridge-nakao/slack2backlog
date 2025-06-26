@@ -1,5 +1,22 @@
 # Claude Code Memory File - Git Worktree運用版
 
+## 🔐 重要なセキュリティポリシー
+
+### リポジトリの可視性について
+**このリポジトリは必ずPrivateで管理すること！Public化は厳禁！**
+- セキュリティ上の理由によりPublicリポジトリは禁止
+- 顧客情報、APIキー、内部実装の詳細が含まれる可能性があるため
+- クローン時は適切なアクセス権限（Personal Access Token等）が必要
+
+### アクセス方法
+```bash
+# PATを使用したクローン（推奨）
+git clone https://<PAT>@github.com/bridge-nakao/slack2backlog.git
+
+# SSHを使用したクローン
+git clone git@github.com:bridge-nakao/slack2backlog.git
+```
+
 ## 🚨 Claude Code起動時の確認事項
 
 Claude Codeを起動した際、このCLAUDE.mdを読み込んで、ユーザーが実行すべきコマンドや確認事項があれば最初に提示してください。
