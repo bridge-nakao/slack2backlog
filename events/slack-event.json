@@ -1,0 +1,10 @@
+{
+  "body": "{\"token\":\"verification_token\",\"team_id\":\"T123\",\"api_app_id\":\"A123\",\"event\":{\"type\":\"message\",\"channel\":\"C123\",\"user\":\"U123\",\"text\":\"Backlog登録希望 テストタスク\",\"ts\":\"1234567890.123456\",\"event_ts\":\"1234567890.123456\"},\"type\":\"event_callback\",\"event_id\":\"Ev123\",\"event_time\":1234567890}",
+  "headers": {
+    "X-Slack-Signature": "v0=a2114d57b48eac39b9ad189dd8316235a7b4a8d21a10bd27519666489c69b503",
+    "X-Slack-Request-Timestamp": "1234567890",
+    "Content-Type": "application/json"
+  },
+  "httpMethod": "POST",
+  "path": "/slack/events"
+}

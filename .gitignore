@@ -18,7 +18,6 @@ env/
 
 # AWS SAM
 .aws-sam/
-samconfig.toml
 packaged.yaml
 
 # IDE

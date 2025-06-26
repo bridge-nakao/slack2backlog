@@ -30,6 +30,9 @@ slack2backlog/
 ├── events/                   # SAMテストイベント
 ├── .github/workflows/        # GitHub Actions
 ├── template.yaml            # SAMテンプレート
+├── samconfig.toml          # SAM設定
+├── docker-compose.yml      # ローカル開発環境
+├── buildspec.yml           # AWS CodeBuild設定
 ├── package.json            # プロジェクト設定
 ├── jest.config.js          # Jest設定
 ├── .eslintrc.json          # ESLint設定
@@ -239,13 +242,19 @@ aws sqs receive-message --queue-url https://sqs.region.amazonaws.com/.../dlq
 ### ローカルテスト
 
 ```bash
+# ローカルサービスの起動（DynamoDB、SQS）
+./scripts/local/start-local.sh
+
 # SAM Localを使用
 sam local start-api
 
 # テストイベントの送信
 curl -X POST http://localhost:3000/slack/events \
   -H "Content-Type: application/json" \
-  -d @test/fixtures/slack-event.json
+  -d @events/slack-event.json
+
+# ローカルサービスの停止
+./scripts/local/stop-local.sh
 ```
 
 ### ユニットテスト

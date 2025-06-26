@@ -1,0 +1,208 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  slack2backlog
+
+  Slack to Backlog integration bot using AWS Lambda
+
+# Global settings for all functions
+Globals:
+  Function:
+    Timeout: 10
+    MemorySize: 512
+    Runtime: nodejs20.x
+    Environment:
+      Variables:
+        NODE_ENV: production
+        LOG_LEVEL: info
+
+Parameters:
+  Stage:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Deployment stage
+
+Resources:
+  # API Gateway
+  SlackApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Stage
+      Cors:
+        AllowMethods: "'POST, OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Slack-Signature,X-Slack-Request-Timestamp'"
+        AllowOrigin: "'*'"
+      Auth:
+        ApiKeyRequired: false
+
+  # Event Ingest Lambda Function
+  EventIngestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/event_ingest/
+      Handler: index.handler
+      FunctionName: !Sub ${AWS::StackName}-event-ingest-${Stage}
+      Description: Receives Slack events and queues them for processing
+      Environment:
+        Variables:
+          SQS_QUEUE_URL: !Ref EventQueue
+          SLACK_SIGNING_SECRET: !Sub '{{resolve:secretsmanager:${SlackSecrets}:SecretString:signing_secret}}'
+      Policies:
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt EventQueue.QueueName
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: !Ref SlackSecrets
+      Events:
+        SlackEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref SlackApi
+            Path: /slack/events
+            Method: POST
+
+  # Backlog Worker Lambda Function
+  BacklogWorkerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/backlog_worker/
+      Handler: index.handler
+      FunctionName: !Sub ${AWS::StackName}-backlog-worker-${Stage}
+      Description: Processes queued events and creates Backlog issues
+      ReservedConcurrentExecutions: 1  # Process one at a time
+      Environment:
+        Variables:
+          SLACK_BOT_TOKEN: !Sub '{{resolve:secretsmanager:${SlackSecrets}:SecretString:bot_token}}'
+          BACKLOG_API_KEY: !Sub '{{resolve:secretsmanager:${BacklogSecrets}:SecretString:api_key}}'
+          BACKLOG_SPACE: !Ref BacklogSpace
+          PROJECT_ID: !Ref BacklogProjectId
+          ISSUE_TYPE_ID: !Ref BacklogIssueTypeId
+          PRIORITY_ID: !Ref BacklogPriorityId
+          IDEMPOTENCY_TABLE: !Ref IdempotencyTable
+      Policies:
+        - SQSPollerPolicy:
+            QueueName: !GetAtt EventQueue.QueueName
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: !Ref SlackSecrets
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: !Ref BacklogSecrets
+        - DynamoDBCrudPolicy:
+            TableName: !Ref IdempotencyTable
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt EventQueue.Arn
+            BatchSize: 1
+
+  # SQS Queue
+  EventQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${AWS::StackName}-event-queue-${Stage}
+      VisibilityTimeout: 60
+      MessageRetentionPeriod: 345600  # 4 days
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
+        maxReceiveCount: 3
+
+  # Dead Letter Queue
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${AWS::StackName}-dlq-${Stage}
+      MessageRetentionPeriod: 1209600  # 14 days
+
+  # DynamoDB Table for Idempotency
+  IdempotencyTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${AWS::StackName}-idempotency-${Stage}
+      AttributeDefinitions:
+        - AttributeName: event_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: event_id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  # Secrets Manager for Slack credentials
+  SlackSecrets:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub ${AWS::StackName}-slack-secrets-${Stage}
+      Description: Slack Bot Token and Signing Secret
+      SecretString: |
+        {
+          "bot_token": "xoxb-placeholder",
+          "signing_secret": "placeholder"
+        }
+
+  # Secrets Manager for Backlog credentials
+  BacklogSecrets:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub ${AWS::StackName}-backlog-secrets-${Stage}
+      Description: Backlog API Key
+      SecretString: |
+        {
+          "api_key": "placeholder"
+        }
+
+  # Parameters for Backlog configuration
+  BacklogSpace:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /${AWS::StackName}/${Stage}/backlog/space
+      Type: String
+      Value: example.backlog.com
+      Description: Backlog space URL
+
+  BacklogProjectId:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /${AWS::StackName}/${Stage}/backlog/project_id
+      Type: String
+      Value: "12345"
+      Description: Default Backlog project ID
+
+  BacklogIssueTypeId:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /${AWS::StackName}/${Stage}/backlog/issue_type_id
+      Type: String
+      Value: "67890"
+      Description: Default Backlog issue type ID
+
+  BacklogPriorityId:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /${AWS::StackName}/${Stage}/backlog/priority_id
+      Type: String
+      Value: "3"
+      Description: Default Backlog priority ID
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub https://${SlackApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/slack/events
+    Export:
+      Name: !Sub ${AWS::StackName}-api-url
+
+  EventQueueUrl:
+    Description: SQS Queue URL
+    Value: !Ref EventQueue
+    Export:
+      Name: !Sub ${AWS::StackName}-queue-url
+
+  EventQueueArn:
+    Description: SQS Queue ARN
+    Value: !GetAtt EventQueue.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-queue-arn
