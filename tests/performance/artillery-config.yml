@@ -1,0 +1,87 @@
+config:
+  target: "http://localhost:3000"
+  phases:
+    - duration: 60
+      arrivalRate: 10
+      name: "Warm up"
+    - duration: 120
+      arrivalRate: 50
+      name: "Ramp up"
+    - duration: 180
+      arrivalRate: 100
+      name: "Sustained load"
+  payload:
+    path: "./test-events.json"
+    fields:
+      - "event"
+  processor: "./artillery-processor.js"
+  variables:
+    timestamp: "{{ $timestamp }}"
+    signingSecret: "test-signing-secret"
+
+scenarios:
+  - name: "Slack Event - Backlog Registration"
+    weight: 80
+    flow:
+      - function: "generateSignature"
+      - post:
+          url: "/slack/events"
+          headers:
+            x-slack-request-timestamp: "{{ timestamp }}"
+            x-slack-signature: "{{ signature }}"
+            Content-Type: "application/json"
+          json:
+            type: "event_callback"
+            event_id: "Ev{{ $randomNumber(100000, 999999) }}"
+            event:
+              type: "message"
+              text: "Backlog登録希望 負荷テストタスク {{ $randomNumber(1, 1000) }}"
+              user: "U{{ $randomNumber(100000, 999999) }}"
+              channel: "C{{ $randomNumber(100000, 999999) }}"
+              ts: "{{ $timestamp }}.{{ $randomNumber(100000, 999999) }}"
+          expect:
+            - statusCode: 200
+            - contentType: json
+            - hasProperty: "ok"
+
+  - name: "Slack Event - Regular Message"
+    weight: 15
+    flow:
+      - function: "generateSignature"
+      - post:
+          url: "/slack/events"
+          headers:
+            x-slack-request-timestamp: "{{ timestamp }}"
+            x-slack-signature: "{{ signature }}"
+            Content-Type: "application/json"
+          json:
+            type: "event_callback"
+            event_id: "Ev{{ $randomNumber(100000, 999999) }}"
+            event:
+              type: "message"
+              text: "通常のメッセージ {{ $randomNumber(1, 1000) }}"
+              user: "U{{ $randomNumber(100000, 999999) }}"
+              channel: "C{{ $randomNumber(100000, 999999) }}"
+              ts: "{{ $timestamp }}.{{ $randomNumber(100000, 999999) }}"
+          expect:
+            - statusCode: 200
+
+  - name: "URL Verification"
+    weight: 5
+    flow:
+      - post:
+          url: "/slack/events"
+          headers:
+            Content-Type: "application/json"
+          json:
+            type: "url_verification"
+            challenge: "test-challenge-{{ $randomNumber(100000, 999999) }}"
+          expect:
+            - statusCode: 200
+            - hasProperty: "challenge"
+
+reporting:
+  - type: "html"
+    filename: "performance-report.html"
+  - type: "json"
+    filename: "performance-report.json"
