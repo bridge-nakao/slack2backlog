@@ -1,7 +1,20 @@
 {
-  "name": "slack2backlog-backlog_worker",
+  "name": "slack2backlog-backlog-worker",
   "version": "1.0.0",
-  "description": "backlog_worker Lambda function",
+  "description": "Backlog worker Lambda function for slack2backlog",
   "main": "index.js",
-  "dependencies": {}
+  "scripts": {
+    "test": "jest",
+    "lint": "eslint index.js"
+  },
+  "dependencies": {
+    "aws-sdk": "^2.1691.0",
+    "@slack/web-api": "^7.7.0",
+    "axios": "^1.7.7"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "jest": "^30.0.0",
+    "nock": "^13.5.0"
+  }
 }
