@@ -197,6 +197,133 @@ Resources:
         | stats count() by error.code
         | sort count desc
 
+  # DLQ Alarm
+  DLQMessageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-dlq-messages
+      AlarmDescription: Messages in Dead Letter Queue
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+      Dimensions:
+        - Name: QueueName
+          Value: !Sub ${ServiceName}-dlq
+
+  # Lambda Throttle Alarm
+  LambdaThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-lambda-throttles
+      AlarmDescription: Lambda function is being throttled
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+
+  # Lambda Concurrent Executions Alarm
+  LambdaConcurrentExecutionsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-lambda-concurrent-executions
+      AlarmDescription: High concurrent executions
+      MetricName: ConcurrentExecutions
+      Namespace: AWS/Lambda
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 900
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+
+  # DynamoDB Throttle Alarm
+  DynamoDBThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-dynamodb-throttles
+      AlarmDescription: DynamoDB table is being throttled
+      MetricName: UserErrors
+      Namespace: AWS/DynamoDB
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+      Dimensions:
+        - Name: TableName
+          Value: !Sub ${ServiceName}-idempotency
+
+  # API Gateway 4XX Alarm
+  ApiGateway4XXAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-api-4xx
+      AlarmDescription: High rate of 4XX errors
+      MetricName: 4XXError
+      Namespace: AWS/ApiGateway
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 20
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+
+  # Custom Business Metrics
+  BacklogIssueCreatedMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '[timestamp, request_id, level, message_text = "Backlog issue created successfully", ...]'
+      LogGroupName: !Sub /aws/lambda/${ServiceName}-backlog-worker
+      MetricTransformations:
+        - MetricName: BacklogIssuesCreated
+          MetricNamespace: !Sub ${ServiceName}/Business
+          MetricValue: "1"
+          DefaultValue: 0
+
+  # Slack API Error Metric Filter
+  SlackAPIErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '[timestamp, request_id, level = "error", message_text = "*Slack API*", ...]'
+      LogGroupName: !Sub /aws/lambda/${ServiceName}-backlog-worker
+      MetricTransformations:
+        - MetricName: SlackAPIErrors
+          MetricNamespace: !Sub ${ServiceName}/External
+          MetricValue: "1"
+          DefaultValue: 0
+
+  # Backlog API Error Metric Filter
+  BacklogAPIErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '[timestamp, request_id, level = "error", message_text = "*Backlog API*", ...]'
+      LogGroupName: !Sub /aws/lambda/${ServiceName}-backlog-worker
+      MetricTransformations:
+        - MetricName: BacklogAPIErrors
+          MetricNamespace: !Sub ${ServiceName}/External
+          MetricValue: "1"
+          DefaultValue: 0
+
 Outputs:
   DashboardURL:
     Description: URL to CloudWatch Dashboard
