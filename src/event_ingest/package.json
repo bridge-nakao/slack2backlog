@@ -1,0 +1,7 @@
+{
+  "name": "slack2backlog-event_ingest",
+  "version": "1.0.0",
+  "description": "event_ingest Lambda function",
+  "main": "index.js",
+  "dependencies": {}
+}

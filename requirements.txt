@@ -1,0 +1,21 @@
+# AWS SDK (boto3 is included in Lambda runtime)
+# boto3==1.35.0
+
+# Slack SDK
+slack-sdk==3.33.0
+
+# HTTP client
+requests==2.32.3
+
+# Testing
+pytest==8.3.3
+pytest-cov==5.0.0
+pytest-mock==3.14.0
+
+# Linting
+black==24.8.0
+flake8==7.1.1
+mypy==1.11.2
+
+# Development
+python-dotenv==1.0.1

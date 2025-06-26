@@ -6,6 +6,37 @@ Slackメッセージを自動的にBacklog課題として登録するAWS Lambda�
 
 slack2backlogは、Slackワークスペース内の複数チャンネルを監視し、「Backlog登録希望」を含むメッセージを自動的にBacklogの課題として登録するサーバーレスアプリケーションです。AWS Lambda、API Gateway、SQSを使用した非同期2段構成により、高速かつ信頼性の高い処理を実現します。
 
+## プロジェクト構造
+
+```
+slack2backlog/
+├── src/                      # ソースコード
+│   ├── event_ingest/        # Slackイベント受信Lambda関数
+│   │   ├── index.js         # メインハンドラー
+│   │   └── package.json     # 関数固有の依存関係
+│   ├── backlog_worker/      # Backlog処理Lambda関数
+│   │   ├── index.js         # メインハンドラー
+│   │   └── package.json     # 関数固有の依存関係
+│   └── shared/              # 共有ユーティリティ
+│       ├── slack-client.js  # Slack APIクライアント
+│       ├── backlog-client.js # Backlog APIクライアント
+│       └── utils.js         # 共通ユーティリティ
+├── tests/                    # テストファイル
+│   ├── unit/                # 単体テスト
+│   ├── integration/         # 統合テスト
+│   └── load/                # 負荷テスト
+├── docs/                     # ドキュメント
+├── scripts/                  # ユーティリティスクリプト
+├── events/                   # SAMテストイベント
+├── .github/workflows/        # GitHub Actions
+├── template.yaml            # SAMテンプレート
+├── package.json            # プロジェクト設定
+├── jest.config.js          # Jest設定
+├── .eslintrc.json          # ESLint設定
+├── .prettierrc             # Prettier設定
+└── .gitignore              # Git除外設定
+```
+
 ## アーキテクチャ
 
 ```

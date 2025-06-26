@@ -1,0 +1,30 @@
+{
+  "name": "slack2backlog",
+  "version": "1.0.0",
+  "description": "Slack to Backlog integration bot using AWS Lambda",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint src/**/*.js",
+    "format": "prettier --write src/**/*.js tests/**/*.js",
+    "build": "sam build",
+    "deploy": "sam deploy",
+    "local": "sam local start-api"
+  },
+  "keywords": ["slack", "backlog", "lambda", "aws", "integration"],
+  "author": "bridge-nakao",
+  "license": "MIT",
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "jest": "^30.0.0",
+    "prettier": "^3.3.3",
+    "@types/aws-lambda": "^8.10.145",
+    "@types/node": "^20.0.0"
+  },
+  "dependencies": {
+    "@slack/web-api": "^7.7.0",
+    "aws-sdk": "^2.1691.0",
+    "axios": "^1.7.7"
+  }
+}

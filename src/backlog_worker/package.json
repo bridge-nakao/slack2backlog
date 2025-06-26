@@ -1,0 +1,7 @@
+{
+  "name": "slack2backlog-backlog_worker",
+  "version": "1.0.0",
+  "description": "backlog_worker Lambda function",
+  "main": "index.js",
+  "dependencies": {}
+}
