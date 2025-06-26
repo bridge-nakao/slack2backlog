@@ -1,7 +1,17 @@
 {
-  "name": "slack2backlog-event_ingest",
+  "name": "slack2backlog-event-ingest",
   "version": "1.0.0",
-  "description": "event_ingest Lambda function",
+  "description": "Event ingest Lambda function for slack2backlog",
   "main": "index.js",
-  "dependencies": {}
+  "scripts": {
+    "test": "jest",
+    "lint": "eslint index.js"
+  },
+  "dependencies": {
+    "aws-sdk": "^2.1691.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "jest": "^30.0.0"
+  }
 }
