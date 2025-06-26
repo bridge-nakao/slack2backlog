@@ -60,7 +60,7 @@ temp/
 .aws/
 
 # Secrets - NEVER commit these
-secrets/
+/secrets/
 *.pem
 *.key
 
